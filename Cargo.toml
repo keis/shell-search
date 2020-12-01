@@ -1,0 +1,21 @@
+[package]
+name = "shell-search"
+version = "0.1.0"
+authors = ["David Keijser <keijser@gmail.com>"]
+edition = "2018"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+dbus = "0.9"
+
+[dependencies.glib]
+version = ""
+
+[dependencies.gtk]
+version = "0.9.0"
+features = ["v3_18"]
+
+[dependencies.gio]
+version = ""
+features = ["v2_44"]
