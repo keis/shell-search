@@ -1,24 +1,23 @@
 extern crate gio;
 extern crate gtk;
-extern crate glib;
 
 use std::sync::Arc;
 
 use gio::prelude::*;
 use gtk::prelude::*;
 use gio::{ListStore, DesktopAppInfo};
-use gtk::{FlowBox, SearchEntry, Label, Window, WindowType};
+use gtk::{FlowBox, SearchEntry, Label, Image, Window, WindowType};
 
 struct LauncherWindow {
     window: Window,
     search: SearchEntry,
-    flowbox: FlowBox,
     model: ListStore,
 }
 
 impl LauncherWindow {
     fn new() -> LauncherWindow {
         let window = Window::new(WindowType::Toplevel);
+        window.set_default_size(600, 300);
 
         window.set_resizable(false);
         window.set_decorated(false);
@@ -45,17 +44,28 @@ impl LauncherWindow {
         LauncherWindow {
             window: window,
             search: search,
-            flowbox: flowbox,
             model: model,
         }
     }
 }
 
-
 fn create_launcher_entry(info: &DesktopAppInfo) -> Result<gtk::Widget, Box<dyn std::error::Error>> {
+    let container = gtk::Box::new(gtk::Orientation::Vertical, 0);
+
+    let icon = Image::new();
+    icon.set_pixel_size(128);
+    match info.get_icon() {
+        Some(gicon) => icon.set_from_gicon(&gicon, gtk::IconSize::unscaled()),
+        None => icon.set_from_icon_name(Some("application-x-executable"), gtk::IconSize::unscaled()),
+    }
+    container.add(&icon);
+
     let name = info.get_display_name().ok_or("Missing display name")?;
     let label = Label::new(Some(name.as_str()));
-    return Ok(label.upcast::<gtk::Widget>());
+    container.add(&label);
+
+    container.show_all();
+    return Ok(container.upcast::<gtk::Widget>());
 }
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
