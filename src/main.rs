@@ -2,6 +2,7 @@ extern crate gio;
 extern crate gtk;
 
 use std::rc::Rc;
+use std::cell::RefCell;
 use std::convert::TryFrom;
 
 use gio::prelude::*;
@@ -84,29 +85,31 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         return Err("Failed to initialize GTK.".into());
     }
 
-    let launcher = Rc::new(LauncherWindow::new());
+    let launcher = Rc::new(RefCell::new(LauncherWindow::new()));
     let launchctx = get_launch_context().expect("Launch context is available");
 
     {
         let _launcher = launcher.clone();
-        launcher.search.connect_search_changed(move |search| {
+        launcher.borrow().search.connect_search_changed(move |search| {
+            let __launcher = _launcher.borrow();
             let query = search.get_text();
             println!("Searching {}", query);
             let result = DesktopAppInfo::search(query.as_str());
-            _launcher.model.remove_all();
+            __launcher.model.remove_all();
             for r in result {
                 if let Some(info) = DesktopAppInfo::new(r[0].as_str()) {
-                    _launcher.model.append(&info);
+                    __launcher.model.append(&info);
                 }
             }
-            if let Some(first) = _launcher.flowbox.get_child_at_index(0) {
-                _launcher.flowbox.select_child(&first);
+            if let Some(first) = __launcher.flowbox.get_child_at_index(0) {
+                __launcher.flowbox.select_child(&first);
             }
         });
     }
     {
         let _launcher = launcher.clone();
-        launcher.window.connect_key_press_event(move |_window, event| {
+        launcher.borrow().window.connect_key_press_event(move |_window, event| {
+            let __launcher = _launcher.borrow();
             if let Some(keyval) = event.get_keyval().name() {
                 match keyval.as_str() {
                     "Escape" => {
@@ -114,11 +117,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                         return Inhibit(true);
                     },
                     "Left" => {
-                        _launcher.flowbox.child_focus(gtk::DirectionType::Left);
+                        __launcher.flowbox.child_focus(gtk::DirectionType::Left);
                         return Inhibit(true);
                     },
                     "Right" => {
-                        _launcher.flowbox.child_focus(gtk::DirectionType::Right);
+                        __launcher.flowbox.child_focus(gtk::DirectionType::Right);
                         return Inhibit(true);
                     }
                     _ => Inhibit(false),
@@ -130,8 +133,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     }
     {
         let _launcher = launcher.clone();
-        launcher.search.connect_activate(move |_entry| {
-            let selected = _launcher.flowbox.get_selected_children();
+        launcher.borrow().search.connect_activate(move |_entry| {
+            let __launcher = _launcher.borrow();
+            let selected = __launcher.flowbox.get_selected_children();
             for child in selected {
                 child.activate();
                 return;
@@ -140,9 +144,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     }
     {
         let _launcher = launcher.clone();
-        launcher.flowbox.connect_child_activated(move |_flowbox, child| {
+        launcher.borrow().flowbox.connect_child_activated(move |_flowbox, child| {
+            let __launcher = _launcher.borrow();
             if let Ok(idx) = u32::try_from(child.get_index()) {
-                if let Some(obj) = _launcher.model.get_object(idx) {
+                if let Some(obj) = __launcher.model.get_object(idx) {
                     let info = obj.downcast::<DesktopAppInfo>().expect("Model only contains DesktopAppInfo");
                     if let Err(e) = info.launch_uris(&[], Some(&launchctx)) {
                         println!("Failed to launch: {}", e);
@@ -152,10 +157,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             }
         });
     }
-    launcher.window.connect_destroy(|_window| {
+    launcher.borrow().window.connect_destroy(|_window| {
         gtk::main_quit();
     });
-    launcher.window.show_all();
+    launcher.borrow().window.show_all();
 
     gtk::main();
 
