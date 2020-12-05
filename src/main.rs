@@ -16,6 +16,7 @@ struct LauncherWindow {
     search: SearchEntry,
     flowbox: FlowBox,
     model: ListStore,
+    details: ApplicationDetails,
 }
 
 impl LauncherWindow {
@@ -46,12 +47,85 @@ impl LauncherWindow {
             }
         );
 
+        let details = ApplicationDetails::new();
+        container.add(&details.container);
+
         LauncherWindow {
-            window: window,
-            search: search,
-            flowbox: flowbox,
-            model: model,
+            window,
+            search,
+            flowbox,
+            model,
+            details,
         }
+    }
+
+    fn get_selected_desktop_app_info(&self) -> Option<DesktopAppInfo> {
+        for child in self.flowbox.get_selected_children() {
+            if let Ok(idx) = u32::try_from(child.get_index()) {
+                return self.model.get_object(idx).map(|obj| {
+                    return obj.downcast::<DesktopAppInfo>()
+                        .expect("Model only contains DesktopAppInfo");
+                });
+            }
+        }
+        return None;
+    }
+
+    fn show_details(&self) {
+        self.flowbox.hide();
+        self.details.container.show_all();
+    }
+}
+
+struct ApplicationDetails {
+    appinfo: Option<DesktopAppInfo>,
+    container: gtk::Box,
+    icon: Image,
+    label: Label,
+    actioncontainer: FlowBox,
+}
+
+impl ApplicationDetails {
+    fn new() -> ApplicationDetails {
+        let container = gtk::Box::new(gtk::Orientation::Horizontal, 0);
+
+        let infocontainer = gtk::Box::new(gtk::Orientation::Vertical, 0);
+        let icon = Image::new();
+        icon.set_pixel_size(128);
+        infocontainer.add(&icon);
+        let label = Label::new(Some("HELLO"));
+        infocontainer.add(&label);
+        container.add(&infocontainer);
+
+        let actioncontainer = FlowBox::new();
+        container.add(&actioncontainer);
+
+        return ApplicationDetails {
+            appinfo: None,
+            container,
+            icon,
+            label,
+            actioncontainer,
+        };
+    }
+
+    fn set_desktop_app_info(&mut self, info: DesktopAppInfo) -> Result<(), Box<dyn std::error::Error>> {
+        self.appinfo = Some(info.clone());
+        let name = info.get_display_name().ok_or("Missing display name")?;
+        self.label.set_text(name.as_str());
+        match info.get_icon() {
+            Some(gicon) => self.icon.set_from_gicon(&gicon, gtk::IconSize::unscaled()),
+            None => self.icon.set_from_icon_name(Some("application-x-executable"), gtk::IconSize::unscaled()),
+        }
+        self.actioncontainer.foreach(|child| {
+            self.actioncontainer.remove(child);
+        });
+        for action in info.list_actions() {
+            let name = info.get_action_name(action.as_str()).unwrap_or(action);
+            let label = Label::new(Some(name.as_str()));
+            self.actioncontainer.add(&label);
+        }
+        return Ok(());
     }
 }
 
@@ -86,7 +160,6 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     }
 
     let launcher = Rc::new(RefCell::new(LauncherWindow::new()));
-    let launchctx = get_launch_context().expect("Launch context is available");
 
     {
         let _launcher = launcher.clone();
@@ -109,12 +182,28 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     {
         let _launcher = launcher.clone();
         launcher.borrow().window.connect_key_press_event(move |_window, event| {
-            let __launcher = _launcher.borrow();
+            let mut __launcher = _launcher.borrow_mut();
             if let Some(keyval) = event.get_keyval().name() {
                 match keyval.as_str() {
                     "Escape" => {
                         gtk::main_quit();
                         return Inhibit(true);
+                    },
+                    "space" => {
+                        if event.get_state().contains(gdk::ModifierType::CONTROL_MASK) || !_launcher.borrow().search.has_focus() {
+                            if let Some(info) = __launcher.get_selected_desktop_app_info() {
+                                if let Err(e) = __launcher.details.set_desktop_app_info(info) {
+                                    println!("Something went wrong {}", e);
+                                }
+                                __launcher.show_details();
+                                if let Some(child) = __launcher.details.actioncontainer.get_child_at_index(0) {
+                                    __launcher.details.actioncontainer.select_child(&child);
+                                }
+                                __launcher.details.actioncontainer.grab_focus();
+                            }
+                            return Inhibit(true);
+                        }
+                        return Inhibit(false);
                     },
                     "Left" => {
                         __launcher.flowbox.child_focus(gtk::DirectionType::Left);
@@ -149,9 +238,23 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             if let Ok(idx) = u32::try_from(child.get_index()) {
                 if let Some(obj) = __launcher.model.get_object(idx) {
                     let info = obj.downcast::<DesktopAppInfo>().expect("Model only contains DesktopAppInfo");
+                    let launchctx = get_launch_context().expect("Launch context is available");
                     if let Err(e) = info.launch_uris(&[], Some(&launchctx)) {
                         println!("Failed to launch: {}", e);
                     }
+                    gtk::main_quit();
+                }
+            }
+        });
+    }
+    {
+        let _launcher = launcher.clone();
+        launcher.borrow().details.actioncontainer.connect_child_activated(move |_flowbox, child| {
+            if let Ok(idx) = usize::try_from(child.get_index()) {
+                if let Some(info) = _launcher.borrow().details.appinfo.clone() {
+                    let actions = info.list_actions();
+                    let launchctx = get_launch_context().expect("Launch context is available");
+                    info.launch_action(actions[idx].as_str(), Some(&launchctx));
                     gtk::main_quit();
                 }
             }
@@ -161,6 +264,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         gtk::main_quit();
     });
     launcher.borrow().window.show_all();
+    launcher.borrow().details.container.hide();
 
     gtk::main();
 
