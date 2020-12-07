@@ -75,6 +75,28 @@ impl LauncherWindow {
         self.flowbox.hide();
         self.details.container.show_all();
     }
+
+    fn get_flowbox(&self) -> &FlowBox {
+        if self.flowbox.get_visible() {
+            return &self.flowbox;
+        }
+        return & self.details.actioncontainer;
+    }
+
+    fn focus_selected(&self) {
+        let flowbox = self.get_flowbox();
+        for child in flowbox.get_selected_children() {
+            child.grab_focus();
+            return;
+        }
+    }
+
+    fn navigate(&self, dir: gtk::DirectionType) {
+        if self.search.has_focus() {
+            self.focus_selected();
+        }
+        self.get_flowbox().child_focus(dir);
+    }
 }
 
 struct ApplicationDetails {
@@ -190,7 +212,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                         return Inhibit(true);
                     },
                     "space" => {
-                        if event.get_state().contains(gdk::ModifierType::CONTROL_MASK) || !_launcher.borrow().search.has_focus() {
+                        if event.get_state().contains(gdk::ModifierType::CONTROL_MASK) || !__launcher.search.has_focus() {
                             if let Some(info) = __launcher.get_selected_desktop_app_info() {
                                 if let Err(e) = __launcher.details.set_desktop_app_info(info) {
                                     println!("Something went wrong {}", e);
@@ -206,11 +228,19 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                         return Inhibit(false);
                     },
                     "Left" => {
-                        __launcher.flowbox.child_focus(gtk::DirectionType::Left);
+                        __launcher.navigate(gtk::DirectionType::Left);
                         return Inhibit(true);
                     },
                     "Right" => {
-                        __launcher.flowbox.child_focus(gtk::DirectionType::Right);
+                        __launcher.navigate(gtk::DirectionType::Right);
+                        return Inhibit(true);
+                    },
+                    "Up" => {
+                        __launcher.navigate(gtk::DirectionType::Up);
+                        return Inhibit(true);
+                    },
+                    "Down" => {
+                        __launcher.navigate(gtk::DirectionType::Down);
                         return Inhibit(true);
                     }
                     _ => Inhibit(false),
