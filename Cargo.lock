@@ -564,6 +564,7 @@ dependencies = [
  "gio",
  "glib",
  "gtk",
+ "pango",
 ]
 
 [[package]]

@@ -9,11 +9,12 @@ use gio::prelude::*;
 use gtk::prelude::*;
 use gio::{ListStore, AppLaunchContext, DesktopAppInfo};
 use gdk::{Display};
-use gtk::{FlowBox, SearchEntry, Label, Image, Window, WindowType};
+use gtk::{FlowBox, ScrolledWindow, SearchEntry, Label, Image, Window, WindowType};
 
 struct LauncherWindow {
     window: Window,
     search: SearchEntry,
+    scroll: ScrolledWindow,
     flowbox: FlowBox,
     model: ListStore,
     details: ApplicationDetails,
@@ -22,7 +23,7 @@ struct LauncherWindow {
 impl LauncherWindow {
     fn new() -> LauncherWindow {
         let window = Window::new(WindowType::Toplevel);
-        window.set_default_size(600, 300);
+        window.set_default_size(600, 500);
 
         window.set_resizable(false);
         window.set_decorated(false);
@@ -33,9 +34,15 @@ impl LauncherWindow {
         let search = SearchEntry::new();
         container.add(&search);
 
+        let scroll = ScrolledWindow::new::<gtk::Adjustment, gtk::Adjustment>(None, None);
+        scroll.set_min_content_width(600);
+        scroll.set_min_content_height(500);
+        container.add(&scroll);
+
         let flowbox = FlowBox::new();
         flowbox.set_activate_on_single_click(false);
-        container.add(&flowbox);
+        flowbox.set_valign(gtk::Align::Start);
+        scroll.add(&flowbox);
 
         let model = ListStore::new(DesktopAppInfo::static_type());
         flowbox.bind_model(
@@ -53,6 +60,7 @@ impl LauncherWindow {
         LauncherWindow {
             window,
             search,
+            scroll,
             flowbox,
             model,
             details,
@@ -72,12 +80,12 @@ impl LauncherWindow {
     }
 
     fn show_details(&self) {
-        self.flowbox.hide();
+        self.scroll.hide();
         self.details.container.show_all();
     }
 
     fn get_flowbox(&self) -> &FlowBox {
-        if self.flowbox.get_visible() {
+        if self.scroll.get_visible() {
             return &self.flowbox;
         }
         return & self.details.actioncontainer;
@@ -153,6 +161,7 @@ impl ApplicationDetails {
 
 fn create_launcher_entry(info: &DesktopAppInfo) -> Result<gtk::Widget, Box<dyn std::error::Error>> {
     let container = gtk::Box::new(gtk::Orientation::Vertical, 0);
+    container.set_size_request(128 + 64, 128 + 64);
 
     let icon = Image::new();
     icon.set_pixel_size(128);
@@ -164,6 +173,8 @@ fn create_launcher_entry(info: &DesktopAppInfo) -> Result<gtk::Widget, Box<dyn s
 
     let name = info.get_display_name().ok_or("Missing display name")?;
     let label = Label::new(Some(name.as_str()));
+    label.set_max_width_chars(8);
+    label.set_ellipsize(pango::EllipsizeMode::End);
     container.add(&label);
 
     container.show_all();
