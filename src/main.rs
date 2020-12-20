@@ -11,6 +11,8 @@ use gio::{ListStore, AppLaunchContext, DesktopAppInfo};
 use gdk::{Display};
 use gtk::{FlowBox, ScrolledWindow, SearchEntry, Label, Image, Window, WindowType};
 
+use gtk_layer_shell_rs as gtk_layer_shell;
+
 struct LauncherWindow {
     window: Window,
     search: SearchEntry,
@@ -23,10 +25,11 @@ struct LauncherWindow {
 impl LauncherWindow {
     fn new() -> LauncherWindow {
         let window = Window::new(WindowType::Toplevel);
+        setup_layer(&window);
         window.set_default_size(600, 500);
-
         window.set_resizable(false);
         window.set_decorated(false);
+        window.set_opacity(0.9);
 
         let container = gtk::Box::new(gtk::Orientation::Vertical, 0);
         window.add(&container);
@@ -42,6 +45,9 @@ impl LauncherWindow {
         let flowbox = FlowBox::new();
         flowbox.set_activate_on_single_click(false);
         flowbox.set_valign(gtk::Align::Start);
+        flowbox.set_max_children_per_line(10);
+        flowbox.set_min_children_per_line(10);
+        flowbox.set_homogeneous(true);
         scroll.add(&flowbox);
 
         let model = ListStore::new(DesktopAppInfo::static_type());
@@ -185,6 +191,22 @@ fn get_launch_context() -> Result<AppLaunchContext, Box<dyn std::error::Error>> 
     let display = Display::get_default().ok_or("No default display")?;
     let launchctx = display.get_app_launch_context().ok_or("No launch context")?;
     return Ok(launchctx.upcast::<AppLaunchContext>());
+}
+
+fn setup_layer(window: &gtk::Window) {
+    let window = window.clone();
+    gtk_layer_shell::init_for_window(&window);
+    gtk_layer_shell::set_layer(&window, gtk_layer_shell::Layer::Overlay);
+    gtk_layer_shell::set_margin(&window, gtk_layer_shell::Edge::Top, 200);
+    gtk_layer_shell::set_margin(&window, gtk_layer_shell::Edge::Bottom, 200);
+    gtk_layer_shell::set_margin(&window, gtk_layer_shell::Edge::Left, 400);
+    gtk_layer_shell::set_margin(&window, gtk_layer_shell::Edge::Right, 400);
+    gtk_layer_shell::set_anchor(&window, gtk_layer_shell::Edge::Left, true);
+    gtk_layer_shell::set_anchor(&window, gtk_layer_shell::Edge::Right, true);
+    gtk_layer_shell::set_anchor(&window, gtk_layer_shell::Edge::Top, true);
+    gtk_layer_shell::set_anchor(&window, gtk_layer_shell::Edge::Bottom, true);
+    gtk_layer_shell::set_exclusive_zone(&window, -1);
+    gtk_layer_shell::set_keyboard_interactivity(&window, true);
 }
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {

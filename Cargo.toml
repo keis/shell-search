@@ -22,3 +22,6 @@ features = ["v3_22"]
 [dependencies.gio]
 git = "https://github.com/gtk-rs/gtk-rs"
 features = ["v2_44"]
+
+[dependencies.gtk-layer-shell-rs]
+git = "https://github.com/keis/gtk-layer-shell-rs"

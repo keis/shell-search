@@ -370,6 +370,41 @@ dependencies = [
 ]
 
 [[package]]
+name = "gtk-layer-shell-rs"
+version = "0.1.0"
+source = "git+https://github.com/keis/gtk-layer-shell-rs#71191b74def6f69a9fdb78b7d24825424de480cc"
+dependencies = [
+ "bitflags",
+ "gdk",
+ "gio",
+ "glib",
+ "glib-sys",
+ "gtk",
+ "gtk-layer-shell-sys",
+ "gtk-sys",
+ "libc",
+ "pkg-config",
+ "system-deps",
+]
+
+[[package]]
+name = "gtk-layer-shell-sys"
+version = "0.0.1"
+source = "git+https://github.com/keis/gtk-layer-shell-rs#71191b74def6f69a9fdb78b7d24825424de480cc"
+dependencies = [
+ "cairo-sys-rs",
+ "gdk-pixbuf-sys",
+ "gdk-sys",
+ "gio-sys",
+ "glib-sys",
+ "gobject-sys",
+ "gtk-sys",
+ "libc",
+ "pkg-config",
+ "system-deps",
+]
+
+[[package]]
 name = "gtk-sys"
 version = "0.13.0"
 source = "git+https://github.com/gtk-rs/gtk-rs#2f45b75eddf6c0fdd731768428a28d4fb1ccd4ca"
@@ -602,6 +637,7 @@ dependencies = [
  "gio",
  "glib",
  "gtk",
+ "gtk-layer-shell-rs",
  "pango",
 ]
 
