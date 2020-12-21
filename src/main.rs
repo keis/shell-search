@@ -7,7 +7,7 @@ use std::convert::TryFrom;
 
 use gio::prelude::*;
 use gtk::prelude::*;
-use gio::{ListStore, AppLaunchContext, DesktopAppInfo};
+use gio::{ListModel, ListStore, AppLaunchContext, AppInfo, DesktopAppInfo};
 use gdk::{Display};
 use gtk::{FlowBox, ScrolledWindow, SearchEntry, Label, Image, Window, WindowType};
 
@@ -18,12 +18,12 @@ struct LauncherWindow {
     search: SearchEntry,
     scroll: ScrolledWindow,
     flowbox: FlowBox,
-    model: ListStore,
+    model: ListModel,
     details: ApplicationDetails,
 }
 
 impl LauncherWindow {
-    fn new() -> LauncherWindow {
+    fn new(model: ListModel) -> LauncherWindow {
         let window = Window::new(WindowType::Toplevel);
         setup_layer(&window);
         window.set_default_size(600, 500);
@@ -50,11 +50,10 @@ impl LauncherWindow {
         flowbox.set_homogeneous(true);
         scroll.add(&flowbox);
 
-        let model = ListStore::new(DesktopAppInfo::static_type());
         flowbox.bind_model(
             Some(&model),
             |item| {
-                let info = item.downcast_ref::<DesktopAppInfo>().expect("Model data of wrong type");
+                let info = item.downcast_ref::<AppInfo>().expect("Model data of wrong type");
                 let widget = create_launcher_entry(info).expect("Could not create widget");
                 return widget;
             }
@@ -73,12 +72,12 @@ impl LauncherWindow {
         }
     }
 
-    fn get_selected_desktop_app_info(&self) -> Option<DesktopAppInfo> {
+    fn get_selected_desktop_app_info(&self) -> Option<AppInfo> {
         for child in self.flowbox.get_selected_children() {
             if let Ok(idx) = u32::try_from(child.get_index()) {
                 return self.model.get_object(idx).map(|obj| {
-                    return obj.downcast::<DesktopAppInfo>()
-                        .expect("Model only contains DesktopAppInfo");
+                    return obj.downcast::<AppInfo>()
+                        .expect("Model only contains AppInfo");
                 });
             }
         }
@@ -114,7 +113,7 @@ impl LauncherWindow {
 }
 
 struct ApplicationDetails {
-    appinfo: Option<DesktopAppInfo>,
+    appinfo: Option<AppInfo>,
     container: gtk::Box,
     icon: Image,
     label: Label,
@@ -145,7 +144,7 @@ impl ApplicationDetails {
         };
     }
 
-    fn set_desktop_app_info(&mut self, info: DesktopAppInfo) -> Result<(), Box<dyn std::error::Error>> {
+    fn set_desktop_app_info(&mut self, info: AppInfo) -> Result<(), Box<dyn std::error::Error>> {
         self.appinfo = Some(info.clone());
         let name = info.get_display_name().ok_or("Missing display name")?;
         self.label.set_text(name.as_str());
@@ -156,16 +155,18 @@ impl ApplicationDetails {
         self.actioncontainer.foreach(|child| {
             self.actioncontainer.remove(child);
         });
-        for action in info.list_actions() {
-            let name = info.get_action_name(action.as_str()).unwrap_or(action);
-            let label = Label::new(Some(name.as_str()));
-            self.actioncontainer.add(&label);
+        if let Ok(desktopinfo) = info.downcast::<DesktopAppInfo>() {
+            for action in desktopinfo.list_actions() {
+                let name = desktopinfo.get_action_name(action.as_str()).unwrap_or(action);
+                let label = Label::new(Some(name.as_str()));
+                self.actioncontainer.add(&label);
+            }
         }
         return Ok(());
     }
 }
 
-fn create_launcher_entry(info: &DesktopAppInfo) -> Result<gtk::Widget, Box<dyn std::error::Error>> {
+fn create_launcher_entry(info: &AppInfo) -> Result<gtk::Widget, Box<dyn std::error::Error>> {
     let container = gtk::Box::new(gtk::Orientation::Vertical, 0);
     container.set_size_request(128 + 64, 128 + 64);
 
@@ -214,7 +215,12 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         return Err("Failed to initialize GTK.".into());
     }
 
-    let launcher = Rc::new(RefCell::new(LauncherWindow::new()));
+    let model = ListStore::new(AppInfo::static_type());
+    let launcher = Rc::new(RefCell::new(
+        LauncherWindow::new(
+            model.clone().dynamic_cast::<ListModel>().expect("Can cast into interface")
+        )
+    ));
 
     {
         let _launcher = launcher.clone();
@@ -223,10 +229,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             let query = search.get_text();
             println!("Searching {}", query);
             let result = DesktopAppInfo::search(query.as_str());
-            __launcher.model.remove_all();
+            model.remove_all();
             for r in result {
                 if let Some(info) = DesktopAppInfo::new(r[0].as_str()) {
-                    __launcher.model.append(&info);
+                    model.append(&info);
                 }
             }
             if let Some(first) = __launcher.flowbox.get_child_at_index(0) {
@@ -300,7 +306,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             let __launcher = _launcher.borrow();
             if let Ok(idx) = u32::try_from(child.get_index()) {
                 if let Some(obj) = __launcher.model.get_object(idx) {
-                    let info = obj.downcast::<DesktopAppInfo>().expect("Model only contains DesktopAppInfo");
+                    let info = obj.downcast::<AppInfo>().expect("Model only contains AppInfo");
                     let launchctx = get_launch_context().expect("Launch context is available");
                     if let Err(e) = info.launch_uris(&[], Some(&launchctx)) {
                         println!("Failed to launch: {}", e);
@@ -315,10 +321,12 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         launcher.borrow().details.actioncontainer.connect_child_activated(move |_flowbox, child| {
             if let Ok(idx) = usize::try_from(child.get_index()) {
                 if let Some(info) = _launcher.borrow().details.appinfo.clone() {
-                    let actions = info.list_actions();
-                    let launchctx = get_launch_context().expect("Launch context is available");
-                    info.launch_action(actions[idx].as_str(), Some(&launchctx));
-                    gtk::main_quit();
+                    if let Ok(desktopinfo) = info.downcast::<DesktopAppInfo>() {
+                        let actions = desktopinfo.list_actions();
+                        let launchctx = get_launch_context().expect("Launch context is available");
+                        desktopinfo.launch_action(actions[idx].as_str(), Some(&launchctx));
+                        gtk::main_quit();
+                    }
                 }
             }
         });
