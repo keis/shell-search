@@ -210,15 +210,64 @@ fn setup_layer(window: &gtk::Window) {
     gtk_layer_shell::set_keyboard_interactivity(&window, true);
 }
 
+fn filter_model<P: Fn(&glib::Object) -> bool>(base: &ListStore, filtered: ListStore, predicate: P) {
+    let mut i = 0;
+    let mut j = 0;
+    while let Some(baseobj) = base.get_object(i) {
+        if predicate(&baseobj) {
+            if let Some(filteredobj) = filtered.get_object(j) {
+                if filteredobj != baseobj {
+                    filtered.insert(j, &baseobj);
+                }
+            } else {
+                filtered.insert(j, &baseobj);
+            }
+            j = j + 1;
+        } else {
+            if let Some(filteredobj) = filtered.get_object(j) {
+                if filteredobj == baseobj {
+                    filtered.remove(j);
+                }
+            }
+        }
+        i = i + 1;
+    }
+}
+
+fn appinfo_match (info: &AppInfo, query: &str) -> bool {
+    let lcquery = query.to_lowercase();
+    if let Some(name) = info.get_display_name() {
+        let lcname = name.as_str().to_lowercase();
+        if let Some(_idx) = lcname.find(&lcquery) {
+            return true;
+        }
+    }
+    if let Some(desc) = info.get_description() {
+        let lcdesc = desc.as_str().to_lowercase();
+        if let Some(_idx) = lcdesc.find(&lcquery) {
+            return true;
+        }
+    }
+    return false;
+}
+
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     if gtk::init().is_err() {
         return Err("Failed to initialize GTK.".into());
     }
 
     let model = ListStore::new(AppInfo::static_type());
+
+    for r in AppInfo::get_all() {
+        model.append(&r);
+    }
+
+    let filtered = ListStore::new(AppInfo::static_type());
+    filter_model(&model, filtered.clone(), |_obj| { true });
+
     let launcher = Rc::new(RefCell::new(
         LauncherWindow::new(
-            model.clone().dynamic_cast::<ListModel>().expect("Can cast into interface")
+            filtered.clone().dynamic_cast::<ListModel>().expect("Can cast into interface")
         )
     ));
 
@@ -226,15 +275,12 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         let _launcher = launcher.clone();
         launcher.borrow().search.connect_search_changed(move |search| {
             let __launcher = _launcher.borrow();
-            let query = search.get_text();
-            println!("Searching {}", query);
-            let result = DesktopAppInfo::search(query.as_str());
-            model.remove_all();
-            for r in result {
-                if let Some(info) = DesktopAppInfo::new(r[0].as_str()) {
-                    model.append(&info);
-                }
-            }
+            let searchtext = search.get_text();
+            let query = searchtext.as_str();
+            filter_model(&model, filtered.clone(), |obj| {
+                let info = obj.downcast_ref::<AppInfo>().expect("Model of AppInfo");
+                return appinfo_match(info, &query);
+            });
             if let Some(first) = __launcher.flowbox.get_child_at_index(0) {
                 __launcher.flowbox.select_child(&first);
             }
