@@ -38,15 +38,13 @@ impl LauncherWindow {
         container.add(&search);
 
         let scroll = ScrolledWindow::new::<gtk::Adjustment, gtk::Adjustment>(None, None);
-        scroll.set_min_content_width(600);
-        scroll.set_min_content_height(500);
+        scroll.set_policy(gtk::PolicyType::Never, gtk::PolicyType::Automatic);
+        scroll.set_vexpand(true);
         container.add(&scroll);
 
         let flowbox = FlowBox::new();
         flowbox.set_activate_on_single_click(false);
         flowbox.set_valign(gtk::Align::Start);
-        flowbox.set_max_children_per_line(10);
-        flowbox.set_min_children_per_line(10);
         flowbox.set_homogeneous(true);
         scroll.add(&flowbox);
 
