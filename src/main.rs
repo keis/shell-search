@@ -232,7 +232,10 @@ fn filter_model<P: Fn(&glib::Object) -> bool>(base: &ListStore, filtered: ListSt
     }
 }
 
-fn appinfo_match (info: &AppInfo, query: &str) -> bool {
+fn appinfo_match(info: &AppInfo, query: &str) -> bool {
+    if !info.should_show() {
+        return false;
+    }
     let lcquery = query.to_lowercase();
     if let Some(name) = info.get_display_name() {
         let lcname = name.as_str().to_lowercase();
@@ -249,6 +252,13 @@ fn appinfo_match (info: &AppInfo, query: &str) -> bool {
     return false;
 }
 
+fn apply_search(base: &ListStore, filtered: ListStore, query: &str) {
+    filter_model(base, filtered, |obj| {
+        let info = obj.downcast_ref::<AppInfo>().expect("Model of AppInfo");
+        return appinfo_match(info, &query);
+    });
+}
+
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     if gtk::init().is_err() {
         return Err("Failed to initialize GTK.".into());
@@ -261,7 +271,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     }
 
     let filtered = ListStore::new(AppInfo::static_type());
-    filter_model(&model, filtered.clone(), |_obj| { true });
+    apply_search(&model, filtered.clone(), "");
 
     let launcher = Rc::new(RefCell::new(
         LauncherWindow::new(
@@ -275,10 +285,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             let __launcher = _launcher.borrow();
             let searchtext = search.get_text();
             let query = searchtext.as_str();
-            filter_model(&model, filtered.clone(), |obj| {
-                let info = obj.downcast_ref::<AppInfo>().expect("Model of AppInfo");
-                return appinfo_match(info, &query);
-            });
+            apply_search(&model, filtered.clone(), query);
             if let Some(first) = __launcher.flowbox.get_child_at_index(0) {
                 __launcher.flowbox.select_child(&first);
             }
