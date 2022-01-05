@@ -249,6 +249,14 @@ fn appinfo_match(info: &AppInfo, query: &str) -> bool {
             return true;
         }
     }
+    if let Some(desktopinfo) = info.downcast_ref::<DesktopAppInfo>() {
+        for keyword in desktopinfo.get_keywords() {
+            let lckeyword = keyword.as_str().to_lowercase();
+            if let Some(_idx) = lckeyword.find(&lcquery) {
+                return true;
+            }
+        }
+    }
     return false;
 }
 
